@@ -7,7 +7,7 @@ import tempfile
 import feedparser
 from datetime import datetime
 from reader.rss_document import RssDocument, RssItem
-from reader.rss_formatter import RssFormatter, JsonRssFormatter, TextRssFormatter
+from reader.rss_formatter import RssFormatter, JsonRssFormatter, TextRssFormatter, HtmlRssFormatter
 from version import __version__
 
 
@@ -37,11 +37,6 @@ class RssReaderOptionsParser(argparse.ArgumentParser):
         # group2 - normal application run
         group2 = self.add_argument_group()
         group2.add_argument(
-            '--json',
-            action='store_true',
-            help='print result as JSON in stdout',
-        )
-        group2.add_argument(
             '--verbose',
             action='store_true',
             help='outputs verbose status messages',
@@ -51,12 +46,26 @@ class RssReaderOptionsParser(argparse.ArgumentParser):
             metavar='LIMIT',
             help='limit news topics if this parameter provided',
             type=int,
-            default=None)
+            default=None,
+        )
         group2.add_argument(
             '--date',
             metavar='DATE',
             help='show feeds locally cached with same published date in YYMMDD format. Since version 3.0',
-            default=None)
+            default=None,
+        )
+        group2.add_argument(
+            '--json',
+            action='store_true',
+            help='print result as JSON in stdout',
+        )
+        group2.add_argument(
+            '--to-html',
+            metavar='FILE',
+            help='format results as html file FILE. Argument can be specified multiple times. Since version 4.0',
+            action='append',
+            dest="html",
+        )
         group2.add_argument(
             'url',
             help='RSS url to be used',
@@ -134,13 +143,14 @@ class RssReader:
     cache = RssCache()
 
     @staticmethod
-    def run(self, args=None):
+    def run(args=None):
         try:
             reader = RssReader(args)
             reader.load_rss()
             print(reader.format_output())
+            reader.generate_files()
         except RssException as e:
-            self.logger.error("Execution failed", exc_info=e)
+            RssReader.logger.error("Execution failed", exc_info=e)
             print(f"Execution failed: {e}")
 
     def __init__(self, args=None):
@@ -171,7 +181,7 @@ class RssReader:
             print(f"Argument 'url' should be present")
             parser.print_usage()
             exit(self.EXIT_CODE_VALIDATION_ERROR)
-        if args.limit and args.limit <= 0:
+        if args.limit is not None and args.limit <= 0:
             print(f"Argument 'limit' should be positive number, when specified")
             parser.print_usage()
             exit(self.EXIT_CODE_VALIDATION_ERROR)
@@ -218,3 +228,25 @@ class RssReader:
     def format_output(self):
         formatter: RssFormatter = JsonRssFormatter() if self.args.json else TextRssFormatter()
         return formatter.format(self.document)
+
+    def generate_files(self):
+        failures = []
+        generated = []
+        if self.args.html:
+            html = HtmlRssFormatter().format(self.document)
+            for file in self.args.html:
+                try:
+                    with open(file, "w") as f:
+                        f.write(html)
+                    generated.append(file)
+                    self.logger.debug("File %s was generated", file)
+                except Exception as e:
+                    self.logger.error(f"Failed to generate file {file}", exc_info=e)
+                    failures.append((file, e))
+        if failures:
+            class RssDocumentGenerationException(RssException):
+                pass
+            RssDocumentGenerationException(f"Failed to generate files {failures}")
+        return generated
+
+

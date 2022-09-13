@@ -1,5 +1,6 @@
 import logging
 import os
+import tempfile
 import unittest
 
 from reader.rss_document import RssDocument, RssItem
@@ -212,3 +213,11 @@ class RssReaderTest(unittest.TestCase):
             # OK
             print(e)
             pass
+
+    def test_generate_html(self):
+        file = tempfile.gettempdir() + os.path.sep + str(self)
+        reader = RssReader(['--verbose', URL, '--to-html', file + ".1.html", '--to-html', file + ".2.html"])
+        reader.load_rss()
+        generated = reader.generate_files()
+        self.assertEqual(2, len(generated))
+        logging.getLogger().info("Generated files %s", generated)

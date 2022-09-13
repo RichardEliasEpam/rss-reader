@@ -9,10 +9,6 @@ logger = logging.getLogger(__file__)
 
 
 class RssFormatter:
-    def print(self, document: RssDocument):
-        formatted = format(document)
-        print(formatted)
-
     @abstractmethod
     def format_internal(self, document: RssDocument):
         raise NotImplemented
@@ -30,6 +26,7 @@ class JsonRssFormatter(RssFormatter):
                 'title': i.title,
                 'link': i.link,
                 'published_date': i.published_date,
+                'image_link': i.image_link,
             }
 
         def format_document(d: RssDocument):
@@ -54,3 +51,32 @@ class TextRssFormatter(RssFormatter):
             result.write(f"Link: {i.link}")
         result.write("\n")
         return result.getvalue()
+
+
+class HtmlRssFormatter(RssFormatter):
+    def format_internal(self, document: RssDocument):
+        result = io.StringIO()
+        result.write(f"""
+        <html>
+            <head>
+                <title>{document.title}</title>
+                <h1>{document.title}</h1>
+            </head>
+            <body>
+            <p>Last update: {document.updated}</p>
+            <h2>Feeds</h2>
+        """)
+        for i in document.items:
+            result.write(f"<p>")
+            result.write(f"<a href='{i.link}'>{i.title}</a>")
+            result.write(f" (published {i.published_date})")
+            if i.image_link:
+                result.write("<br/>")
+                result.write(f"<img src='{i.image_link}' width='130' height='86'/>")
+            result.write(f"</p>")
+        result.write(f"""
+            </body>
+        </html>
+        """)
+        return result.getvalue()
+

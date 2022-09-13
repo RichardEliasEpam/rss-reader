@@ -8,17 +8,19 @@ and can be run as command `rss-reader <args>` or can be executed using `python r
 
 Usage of utility is as followed
 ```shell
-usage: rss_reader.py [--help] [--version] [--json] [--verbose] [--limit LIMIT] [url]
+usage: rss-reader [--help] [--version] [--verbose] [--limit LIMIT] [--date DATE] [--json] [--to-html FILE] [url]
 
 Pure Python command-line RSS reader.
 
-  --help, -h     show this help message and exit
-  --version      print version of Rss reader utility and exit
+  --help, -h      show this help message and exit
+  --version       print version of Rss reader utility and exit
 
-  --json         print result as JSON in stdout
-  --verbose      outputs verbose status messages
-  --limit LIMIT  limit news topics if this parameter provided
-  url            RSS url to be used
+  --verbose       outputs verbose status messages
+  --limit LIMIT   limit news topics if this parameter provided
+  --date DATE     show feeds locally cached with same published date in YYMMDD format. Since version 3.0
+  --json          print result as JSON in stdout
+  --to-html FILE  format results as html file FILE. Argument can be specified multiple times. Since version 4.0
+  url             RSS url to be used
 ```
 
 ### RSS url
@@ -55,13 +57,18 @@ Json output format is
       "title": "$feed1Title",
       "link": "$feed1Link",
       "published_date": "$feed1PublishedDate"
+      "image_link": "$feed1ImageLink"
     },
     {
       "title": "$feed2Title",
       "link": "$feed2Link",
-      "published_date": "$feed2PublishedDate"
+      "published_date": "$feed2PublishedDate",
+      "image_link": "$feed2ImageLink"
     }
   ]
 }
 ```
 
+#### Html formatter (`--to-html`)
+Utility can generate multiple HTML files when specifying multiple arguments
+(eg `--to-html FILE1 --to-html FILE2`)
