@@ -1,9 +1,9 @@
 import argparse
 import logging
 import sys
-
 import feedparser
-from src.reader.rss_document import RssDocument
+from reader.rss_document import RssDocument
+from reader.rss_formatter import RssFormatter, JsonRssFormatter, TextRssFormatter
 
 
 class RssReaderOptionsParser(argparse.ArgumentParser):
@@ -42,7 +42,7 @@ class RssReaderOptionsParser(argparse.ArgumentParser):
             metavar='LIMIT',
             help='limit news topics if this parameter provided',
             type=int,
-            default=-1)
+            default=None)
         group2.add_argument(
             'url',
             help='RSS url to be used',
@@ -59,7 +59,7 @@ class RssReaderOptionsParser(argparse.ArgumentParser):
 
 class RssReader:
     logger = logging.getLogger("RssReader")
-    VERSION = '0.1'
+    VERSION = '1.0'
 
     def __init__(self, args):
         self.args = self.handle_args(args)
@@ -84,6 +84,10 @@ class RssReader:
             print(f"Argument 'url' should be present")
             parser.print_usage()
             exit(3)
+        if args.limit is not None and args.limit <= 0:
+            print(f"Argument 'limit' should be positive number, when specified")
+            parser.print_usage()
+            exit(3)
         # setup logger
         if args.verbose:
             logging.basicConfig(
@@ -103,4 +107,14 @@ class RssReader:
         return args
 
     def download(self):
-        return RssDocument(feedparser.parse(self.args.url), self.args.limit)
+        parsed_document = feedparser.parse(self.args.url)
+        if parsed_document.bozo:
+            raise Exception("Failed to download url / parse document", parsed_document.bozo_exception)
+        self.document = RssDocument.parse(parsed_document, self.args.limit)
+        return self.document
+
+    def format_output(self):
+        formatter: RssFormatter = JsonRssFormatter() if self.args.json else TextRssFormatter()
+        return formatter.format(self.document)
+
+

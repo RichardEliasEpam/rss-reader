@@ -2,7 +2,6 @@ import logging
 import unittest
 
 from reader.rss_reader import RssReaderOptionsParser, RssReader
-import sys
 
 
 class RssReaderOptionsParserTest(unittest.TestCase):
@@ -95,7 +94,23 @@ class RssReaderTest(unittest.TestCase):
         RssReader(['url'])
         logging.getLogger(str(self)).debug("no output should be present")
 
+    def test_download_url_fails_on_unknown_url(self):
+        reader = RssReader(['--verbose', 'https://unknown-url'])
+        try:
+            reader.download()
+            self.fail('Should fail for unknown url')
+        except Exception as e:
+            self.assertTrue('Failed to download url / parse document' in str(e))
+
     def test_download_url(self):
+        document = RssReader(['--verbose', self.URL]).download()
+
+    def test_download_url_with_limit(self):
         reader = RssReader(['--verbose', '--limit', '1', self.URL])
         document = reader.download()
         self.assertEqual(1, len(document.items))
+
+    def test_download_url_with_too_large_limit(self):
+        document_unlimited = RssReader(['--verbose', self.URL]).download()
+        document_limited = RssReader(['--verbose', '--limit', '100000', self.URL]).download()
+        self.assertEqual(str(document_unlimited), str(document_limited))
