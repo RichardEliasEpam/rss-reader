@@ -2,6 +2,8 @@ import argparse
 import logging
 import sys
 import feedparser
+
+from version import __version__
 from reader.rss_document import RssDocument
 from reader.rss_formatter import RssFormatter, JsonRssFormatter, TextRssFormatter
 
@@ -59,9 +61,8 @@ class RssReaderOptionsParser(argparse.ArgumentParser):
 
 class RssReader:
     logger = logging.getLogger("RssReader")
-    VERSION = '1.0'
 
-    def __init__(self, args):
+    def __init__(self, args=None):
         self.args = self.handle_args(args)
         self.logger.debug("Using args: %ss", self.args)
 
@@ -77,7 +78,7 @@ class RssReader:
             parser.print_help()
             exit(0)
         if args.version:
-            print(f"Version: {self.VERSION}")
+            print(f"Version: {__version__}")
             exit(0)
         # URL should be present on normal run
         if not args.url:
