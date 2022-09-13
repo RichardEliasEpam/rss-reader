@@ -1,5 +1,6 @@
 import logging
 import feedparser
+from datetime import datetime
 
 logger = logging.getLogger(__file__)
 
@@ -20,6 +21,10 @@ class RssItem:
         logger.debug("Parsed RssItem %s", result)
         return result
 
+    def published_day(self):
+        return datetime.strptime(self.published_date, "%Y-%m-%dT%H:%M:%SZ")\
+            .replace(hour=0, minute=0, second=0, microsecond=0)
+
     def __repr__(self):
         return f"RssItem(" \
                f"title={self.title}, " \
@@ -35,11 +40,11 @@ class RssDocument:
         self.items: [RssItem] = items
 
     @staticmethod
-    def parse(d: feedparser.FeedParserDict, limit):
+    def parse(d: feedparser.FeedParserDict):
         result = RssDocument(
             title=d['feed']['title'],
             updated=d['updated'],
-            items=[RssItem.parse(item) for item in d['items'][:limit]],
+            items=[RssItem.parse(item) for item in d['items']],
         )
         logger.debug("Parsed RssDocument %s", result)
         return result

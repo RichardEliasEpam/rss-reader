@@ -1,7 +1,33 @@
 import logging
+import os
 import unittest
 
-from reader.rss_reader import RssReaderOptionsParser, RssReader
+from reader.rss_document import RssDocument, RssItem
+from reader.rss_reader import RssReaderOptionsParser, RssReader, RssDownloader, RssException, RssCache
+
+URL = "https://news.yahoo.com/rss/"
+
+
+def repeat_failed(times):
+    logger = logging.getLogger("repeater")
+
+    def repeat_helper(f):
+        def call_helper(*args):
+            last_exception = None
+            for i in range(0, times):
+                try:
+                    last_exception = None
+                    f(*args)
+                    break
+                except Exception as e:
+                    last_exception = e
+                    logger.debug("Failed to execute %s - trying %s/%s", f, i, times, exc_info=e)
+            if last_exception:
+                raise last_exception
+
+        return call_helper
+
+    return repeat_helper
 
 
 class RssReaderOptionsParserTest(unittest.TestCase):
@@ -30,12 +56,8 @@ class RssReaderOptionsParserTest(unittest.TestCase):
         ])
         self.assertEqual('url', args.url)
 
-    def test_parse_args_failed_without_providing_url(self):
-        try:
-            self.parser.parse_args([])
-            self.fail('url is required')
-        except Exception as e:
-            self.assertTrue('the following arguments are required: url' in str(e))
+    def test_parse_args_should_succeed_without_providing_url(self):
+        self.parser.parse_args([])
 
     def test_parse_args_failed_for_unknown_argument(self):
         try:
@@ -59,9 +81,45 @@ class RssReaderOptionsParserTest(unittest.TestCase):
             self.assertTrue('argument --limit: invalid int value' in str(e))
 
 
-class RssReaderTest(unittest.TestCase):
-    URL = "https://news.yahoo.com/rss/"
+class RssDownloaderTest(unittest.TestCase):
+    def test_download(self):
+        RssDownloader().download(URL)
 
+    def test_download_fails_for_wrong_url(self):
+        try:
+            document = RssDownloader().download("https://unknown.url")
+            self.fail(f"Should fail for unknown url. Found {document}")
+        except RssException as e:
+            # OK
+            print(e)
+            pass
+
+
+class RssCacheTest(unittest.TestCase):
+    def test_store_and_load(self):
+        cache = RssCache()
+        document = RssDocument('title', 'updated', [RssItem("item title", "link", "published_date")])
+        cache.store(document)
+        loaded = cache.load()
+        self.assertEqual(str(document), str(loaded))
+
+    def test_load_when_cache_file_not_exist(self):
+        cache = RssCache()
+        try:
+            os.remove(cache.cache_file)
+        except:
+            # ignore if cache did not exist
+            pass
+        try:
+            cache.load()
+            self.fail("Should fail if cache file not exist")
+        except RssException as e:
+            # OK
+            print(e)
+            pass
+
+
+class RssReaderTest(unittest.TestCase):
     def setUp(self) -> None:
         pass
 
@@ -97,20 +155,60 @@ class RssReaderTest(unittest.TestCase):
     def test_download_url_fails_on_unknown_url(self):
         reader = RssReader(['--verbose', 'https://unknown-url'])
         try:
-            reader.download()
+            reader.load_rss()
             self.fail('Should fail for unknown url')
         except Exception as e:
             self.assertTrue('Failed to download url / parse document' in str(e))
 
     def test_download_url(self):
-        document = RssReader(['--verbose', self.URL]).download()
+        document = RssReader(['--verbose', URL]).load_rss()
 
     def test_download_url_with_limit(self):
-        reader = RssReader(['--verbose', '--limit', '1', self.URL])
-        document = reader.download()
-        self.assertEqual(1, len(document.items))
+        reader = RssReader(['--verbose', '--limit', '1', URL])
+        reader.load_rss()
+        self.assertEqual(1, len(reader.document.items))
 
+    @repeat_failed(10)  # can happen, that new feed is posted between two downloads, in that case we repeat the check
     def test_download_url_with_too_large_limit(self):
-        document_unlimited = RssReader(['--verbose', self.URL]).download()
-        document_limited = RssReader(['--verbose', '--limit', '100000', self.URL]).download()
+        document_unlimited = RssReader(['--verbose', URL]).load_rss()
+        document_limited = RssReader(['--verbose', '--limit', '100000', URL]).load_rss()
         self.assertEqual(str(document_unlimited), str(document_limited))
+
+    def test_load_from_cache_with_date(self):
+        reader = RssReader(['--verbose', '--date', '20220101'])
+        reader.cache.store(RssDocument("title",
+                                       "updated",
+                                       [
+                                           RssItem("title1", "link1", "2022-01-01T01:02:03Z"),
+                                           RssItem("title2", "link2", "2030-01-01T00:00:00Z"),
+                                       ]))
+        document = reader.load_rss()
+        self.assertEqual(str([RssItem("title1", "link1", "2022-01-01T01:02:03Z")]), str(document.items))
+
+    def test_load_from_cache_with_date_and_limit(self):
+        date = '2022-01-01T01:02:03Z'
+        reader = RssReader(['--verbose', '--date', '20220101', '--limit', '1'])
+        reader.cache.store(RssDocument("title",
+                                       "updated",
+                                       [
+                                           RssItem("title1", "link1", date),
+                                           RssItem("title2", "link2", date),
+                                       ]))
+        document = reader.load_rss()
+        self.assertEqual(str([RssItem("title1", "link1", date)]), str(document.items))
+
+    def test_load_from_cache_with_date_fail_when_no_items_are_present(self):
+        reader = RssReader(['--verbose', '--date', '20300101'])
+        reader.cache.store(RssDocument("title",
+                                       "updated",
+                                       [
+                                           RssItem("title1", "link1", "2022-01-01T01:02:03Z"),
+                                           RssItem("title2", "link2", "2022-01-01T01:02:03Z"),
+                                       ]))
+        try:
+            document = reader.load_rss()
+            self.fail("Should fail if no items found for date")
+        except RssException as e:
+            # OK
+            print(e)
+            pass
